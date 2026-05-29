@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Upload de Modelo 3D para Roblox</title>
+  <style>
+    :root { font-family: Arial, sans-serif; background: #111217; color: #f4f4f5; }
+    body { margin: 0; padding: 24px; }
+    main { max-width: 720px; margin: 0 auto; }
+    .card { background: #1d1f27; border: 1px solid #30323d; border-radius: 16px; padding: 20px; }
+    label { display: block; font-weight: 700; margin-top: 14px; }
+    input, textarea, select, button { width: 100%; box-sizing: border-box; margin-top: 8px; padding: 12px; border-radius: 10px; border: 1px solid #3b3e4b; background: #111217; color: #fff; }
+    button { background: #335fff; border: none; cursor: pointer; font-weight: 700; margin-top: 18px; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    small { color: #b7bac7; }
+    pre { white-space: pre-wrap; overflow-wrap: break-word; background: #0b0c10; border-radius: 10px; padding: 12px; }
+    a { color: #8eb0ff; }
+    .ok { color: #66e38f; }
+    .bad { color: #ff7b7b; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Upload de Modelo 3D para Roblox</h1>
+    <p>Envie .glb, .gltf, .fbx, .rbxm ou .rbxmx para sua conta ou grupo usando Roblox Open Cloud.</p>
+
+    <section class="card">
+      <form id="uploadForm">
+        <label>Senha do seu site</label>
+        <input name="password" type="password" placeholder="A senha que você colocou em UPLOAD_PASSWORD" required />
+
+        <label>Nome do asset</label>
+        <input name="displayName" maxlength="64" placeholder="Ex: Espada Backrooms" required />
+
+        <label>Descrição</label>
+        <textarea name="description" maxlength="1000" placeholder="Descrição opcional"></textarea>
+
+        <label>Enviar para</label>
+        <select name="creatorType">
+          <option value="userId">Minha conta / User ID</option>
+          <option value="groupId">Grupo / Group ID</option>
+        </select>
+
+        <label>User ID ou Group ID</label>
+        <input name="creatorId" inputmode="numeric" placeholder="Ex: 123456789" required />
+        <small>Seu User ID aparece no link do perfil: roblox.com/users/SEU_ID/profile</small>
+
+        <label>Arquivo do modelo</label>
+        <input name="modelFile" type="file" accept=".glb,.gltf,.fbx,.rbxm,.rbxmx" required />
+        <small>Recomendado: .glb com as texturas embutidas. Limite do upload: 20 MB.</small>
+
+        <button id="btn" type="submit">Enviar para Roblox</button>
+      </form>
+    </section>
+
+    <h2>Status</h2>
+    <pre id="status">Aguardando upload...</pre>
+  </main>
+
+  <script>
+    const form = document.getElementById('uploadForm');
+    const statusBox = document.getElementById('status');
+    const btn = document.getElementById('btn');
+
+    function print(data) {
+      statusBox.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+    }
+
+    async function pollOperation(path) {
+      print('Upload enviado. Aguardando moderação/processamento da Roblox...\n' + path);
+
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        const res = await fetch('/api/operation?path=' + encodeURIComponent(path));
+        const data = await res.json();
+
+        if (!res.ok) {
+          print(data);
+          return;
+        }
+
+        if (data.done) {
+          const assetId = data.response && data.response.assetId;
+          if (assetId) {
+            print({
+              concluido: true,
+              assetId,
+              link: 'https://create.roblox.com/store/asset/' + assetId,
+              respostaCompleta: data
+            });
+          } else {
+            print(data);
+          }
+          return;
+        }
+
+        print('Ainda processando... tentativa ' + (i + 1) + '/30\n' + JSON.stringify(data, null, 2));
+      }
+
+      print('Ainda não terminou. A Roblox pode demorar. Tente consultar de novo mais tarde.');
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      btn.disabled = true;
+      print('Enviando arquivo...');
+
+      try {
+        const fd = new FormData(form);
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+
+        if (!res.ok) {
+          print(data);
+          return;
+        }
+
+        const path = data.operation && data.operation.path;
+        if (!path) {
+          print(data);
+          return;
+        }
+
+        await pollOperation(path);
+      } catch (err) {
+        print({ erro: err.message });
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
